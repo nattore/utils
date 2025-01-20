@@ -1,8 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from ..util import AwsConfig
 import awswrangler as wr
 import logging
 
 logging.basicConfig(level=logging.INFO)
+
 
 def _create_table(config):
     """
@@ -18,11 +20,14 @@ def _create_table(config):
             partitions_types=config.partitions_types,
             compression=config.compression,
             description=config.description,
-            mode=config.mode
+            mode=config.mode,
         )
-    except Exception as err:
-        logging.error(f"Unexpected {err=}, {type(err)=}")
+    except Exception as exc:
+        logging.error(
+            f"An exception occurred while creating table {config.table}. Exception: {exc}, Type: {type(exc)}"
+        )
         raise
+
 
 def _unload_partition(query, query_id, config):
     """
@@ -47,6 +52,7 @@ def _unload_partition(query, query_id, config):
         logging.debug(f"Query {query_id} completed.\nQuery metadata:\n{query_metadata}")
         return query_metadata
 
+
 def _execute_unload_partitions(query, periods, config):
     """
     Executes multiple UNLOAD queries using ThreadPoolExecutor.
@@ -55,8 +61,11 @@ def _execute_unload_partitions(query, periods, config):
         future_to_query = {}
         for period in periods:
             formatted_query = query.format(**period)  # Format the query once
-            query_id = str(uuid.uuid4())[-4:]         # Generate query_id once
-            future = executor.submit(_unload_partition, formatted_query, query_id, config)
+            partition_str = "/".join([f"{k}={v}" for k, v in period.items()])
+            query_id = f"{config.table}/{partition_str}"  # Generate query_id once
+            future = executor.submit(
+                _unload_partition, formatted_query, query_id, config
+            )
             future_to_query[future] = (formatted_query, query_id)
 
         for future in as_completed(future_to_query):
@@ -67,7 +76,9 @@ def _execute_unload_partitions(query, periods, config):
                 logging.error(f"Query {query_id} generated an exception: {e}")
             else:
                 if result is not None:
-                    logging.info(f"Query {query_id} succeeded. Query metadata: {result}")
+                    logging.info(
+                        f"Query {query_id} succeeded. Query metadata: {result}"
+                    )
                 else:
                     logging.warning(f"Query {query_id} did not produced any results.")
 
@@ -83,21 +94,27 @@ def _repair_table(config):
             database=config.database,
             data_source=config.data_source,
             s3_output=config.s3_output,
-            workgroup=config.workgroup
+            workgroup=config.workgroup,
         )
-    except Exception as err:
-        logging.error(f"Unexpected error occurred while repairing table {config.table}. Error: {err}, Type: {type(err)}")
+    except Exception as exc:
+        logging.error(
+            f"An exception occurred while repairing table {config.table}. Exception: {exc}, Type: {type(exc)}"
+        )
         raise
     else:
-        if state == 'SUCCEEDED':
+        if state == "SUCCEEDED":
             logging.info(f"MSCK on table {config.table} succeeded.")
-        elif state == 'FAIL':
+        elif state == "FAIL":
             logging.error(f"MSCK on table {config.table} failed.")
-        elif state == 'CANCELLED':
+        elif state == "CANCELLED":
             logging.warning(f"MSCK on table {config.table} was cancelled.")
         else:
-            logging.error(f"MSCK on table {config.table} resulted in an unknown state: {state}.")
-            raise ValueError(f"Unknown state: {state} encountered during MSCK on table {config.table}.")
+            logging.error(
+                f"MSCK on table {config.table} resulted in an unknown state: {state}."
+            )
+            raise ValueError(
+                f"Unknown state: {state} encountered during MSCK on table {config.table}."
+            )
 
 
 def build_table(table_params):
@@ -105,9 +122,16 @@ def build_table(table_params):
     Builds a table given table parameters.
     """
     config = AwsConfig(table_params)
-    _create_table(config)
-
-    query = params['select_query']
-    periods = list(table_params['periods'].values())
-    _execute_unload_partitions(query, periods, config)
-    _repair_table(config)
+    logging.info(f"Building table {config.table} with params:\n {table_params}.")
+    try:
+        _create_table(config)
+        query = config.sql
+        periods = list(table_params["periods"].values())
+        _execute_unload_partitions(query, periods, config)
+        _repair_table(config)
+    except Exception as exc:
+        logging.error(
+            f"An exception occurred while building table {config.table}. Exception: {exc}, Type: {type(exc)}"
+        )
+        raise
+    logging.info(f"Table {config.table} created.")
