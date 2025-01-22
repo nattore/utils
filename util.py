@@ -6,6 +6,7 @@ from enum import Enum
 class State(Enum):
     SUCCESS = "success"
     FAIL = "fail"
+    OK = "ok"
 
 class Status:
     def __init__(self, initial_state: State):
