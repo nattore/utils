@@ -1,0 +1,30 @@
+table_template:
+  # General information
+  id: ${globals:table_default.id}
+  group: ${globals:metadata.${.id}.group}
+  name: ${globals:metadata.${.id}.alias}${globals:suffix.${.public}}
+  public: ${globals:table_default.public}
+
+  # Table metadata information
+  table: ${globals:prefix}${.name}
+  database: ${globals:aws.local.database}
+  location: ${globals:aws.local.bucket}${globals:aws.local.prefix}
+  description: ${globals:table_default.description}
+  columns_types: ${globals:table_default.columns_types}
+  columns_descriptions: ${globals:table_default.columns_descriptions}
+  partitions_types: ${globals:${.group}.partitions_types}
+  partitions_values: ${globals:table_default.partitions_values}
+  format: ${globals:table_default.format}
+  compression: ${globals:table_default.compression}
+
+  # Build table args
+  mode: ${globals:table_default.mode}
+
+  # AWS Athena args
+  workgroup: ${globals:aws.local.workgroup}
+
+  # Data query selection information
+  process_date: ${globals:process_date}
+  periods: ${globals:${.group}.periods}
+  select_query: ${globals:table_default.select_query}
+  select_params: ${globals:table_default.select_params}

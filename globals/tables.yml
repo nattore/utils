@@ -1,0 +1,48 @@
+# Table default values
+table_default:
+  # General information
+  id: publico
+  public: default
+
+  # Table metadata information
+  description: ''
+  columns_types: {}
+  columns_descriptions: {}
+  partitions_values: [{}]
+  format: parquet
+  compression: snappy
+
+  # Build table args
+  mode: overwrite
+
+  # Data query selection information
+  select_query: ''
+  select_params: {}
+
+# Global prefix
+prefix: ${namespace}${model.prefix}
+
+# Suffixes by public
+suffix:
+  em_dia: em_dia
+  em_atraso: em_atraso
+  default: ''
+
+# Tables information by id
+metadata:
+  publico:
+    alias: publico
+    group: contratos
+    periodicity: monthly
+    sources:
+      database7: publico_layout7
+      database9: publico_layout9
+
+# Common information by group
+contratos:
+  partitions_types: {anomes: string}
+  periods: [202501, 202412, 202411]
+
+google_analytics:
+  partitions_types: {anomes: string}
+  periods: [202501, 202412, 202411]

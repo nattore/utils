@@ -1,0 +1,12 @@
+# Global parameters
+reference_date: 202501
+process_date: 202412
+namespace: neo_
+
+# Model information
+model:
+  name: matrix
+  abbr: matrix
+  version: 9
+  alias: ${.abbr}${.version}
+  prefix: ${.alias}_
