@@ -1,0 +1,134 @@
+def plot_target_cdf(
+    df,
+    anomes,
+    atraso_range=None,
+    highlight_targets=None,
+    max_points=1_000_000,
+    max_percentile=None,
+    save_to_file=False,
+    file_name="cdf_plot.png",
+    df2=None,
+    label1="Dataset 1",
+    label2="Dataset 2"
+):
+    """
+    Plot the empirical CDF of the 'target' column from one or two DataFrames for a given 'anomes',
+    optionally filtering by 'atraso' and percentile, and highlighting specific target values.
+
+    Parameters:
+    - df (pd.DataFrame): First dataset with 'target', 'atraso', and 'anomes'.
+    - df2 (pd.DataFrame, optional): Second dataset to compare.
+    - anomes (int or str): YYYYMM partition to filter.
+    - atraso_range (tuple, optional): (min, max) values to filter 'atraso'.
+    - highlight_targets (list of float, optional): Target values to highlight.
+    - max_points (int): Maximum points to use for plotting (per dataset).
+    - max_percentile (float, optional): Percentile cap (0-100) to limit the range of values.
+    - save_to_file (bool): Save the plot instead of showing.
+    - file_name (str): File name for the saved plot.
+    - label1 (str): Legend label for df.
+    - label2 (str): Legend label for df2.
+    """
+
+    def get_filtered_values(data):
+        filtered = data[data['anomes'] == anomes]
+        if atraso_range and len(atraso_range) == 2:
+            a_min, a_max = atraso_range
+            filtered = filtered[(filtered['atraso'] >= a_min) & (filtered['atraso'] <= a_max)]
+        if max_percentile is not None:
+            max_val = np.percentile(filtered['target'], max_percentile)
+            filtered = filtered[filtered['target'] <= max_val]
+        values = filtered['target'].values
+        if len(values) > max_points:
+            rng = np.random.default_rng(seed=42)
+            values = rng.choice(values, size=max_points, replace=False)
+        return np.sort(values)
+
+    # Filter and compute CDF for first dataset
+    sorted1 = get_filtered_values(df)
+    cdf1 = np.arange(1, len(sorted1) + 1) / len(sorted1)
+
+    # Filter and compute CDF for second dataset if provided
+    if df2 is not None:
+        sorted2 = get_filtered_values(df2)
+        cdf2 = np.arange(1, len(sorted2) + 1) / len(sorted2)
+
+    # Plotting
+    plt.figure(figsize=(10, 5))
+    plt.step(sorted1, cdf1, where='post', label=label1, color='steelblue', alpha=0.8)
+    
+    if df2 is not None:
+        plt.step(sorted2, cdf2, where='post', label=label2, color='darkorange', alpha=0.8)
+
+    # Highlight targets on first dataset
+    if highlight_targets:
+        for val in highlight_targets:
+            idx1 = np.searchsorted(sorted1, val, side='right')
+            prob1 = idx1 / len(sorted1)
+            plt.axvline(val, color='gray', linestyle='--', alpha=0.3)
+            plt.axhline(prob1, color='gray', linestyle='--', alpha=0.3)
+            plt.scatter(val, prob1, color='steelblue', s=40, zorder=5)
+            plt.text(
+                val, prob1, f'{prob1:.1%}',
+                va='bottom', ha='right', fontsize=8,
+                color='steelblue',
+                bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.2')
+            )
+
+            if df2 is not None:
+                idx2 = np.searchsorted(sorted2, val, side='right')
+                prob2 = idx2 / len(sorted2)
+                plt.scatter(val, prob2, color='darkorange', s=40, zorder=5)
+                plt.text(
+                    val, prob2, f'{prob2:.1%}',
+                    va='top', ha='left', fontsize=8,
+                    color='darkorange',
+                    bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.2')
+                )
+
+    title = f"CDF Comparison for anomes = {anomes}"
+    if atraso_range:
+        title += f", atraso {atraso_range[0]}–{atraso_range[1]}"
+    if max_percentile:
+        title += f", max {max_percentile}th percentile"
+
+    plt.title(title)
+    plt.xlabel("Target Value")
+    plt.ylabel("Cumulative Probability")
+    plt.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
+    plt.legend()
+    plt.tight_layout()
+
+    if save_to_file:
+        plt.savefig(file_name, dpi=300)
+        print(f"Plot saved to {file_name}")
+    else:
+        plt.show()
+
+import pandas as pd
+import numpy as np
+
+np.random.seed(42)
+n = 1_000_000
+
+# First sample dataset (original)
+df_sample = pd.DataFrame({
+    'target': np.random.gamma(shape=2, scale=3, size=n),
+    'atraso': np.random.randint(0, 30, size=n),
+    'anomes': np.random.choice([202401, 202402, 202403], size=n, p=[0.3, 0.3, 0.4])
+})
+
+# Second sample dataset (slightly shifted, e.g., post-treatment)
+df_sample2 = df_sample.copy()
+df_sample2['target'] = df_sample2['target'] * np.random.normal(loc=0.95, scale=0.05, size=n)
+
+plot_target_cdf(
+    df=df_sample,
+    df2=df_sample2,
+    anomes=202403,
+    atraso_range=(5, 15),
+    highlight_targets=[5, 10, 15],
+    max_percentile=95,
+    save_to_file=False,  # Set to True to save instead
+    label1="Before",
+    label2="After"
+)
