@@ -128,3 +128,39 @@ plot_target_cdf(
     save_to_file=True,
     file_name="test_cdf_plot.png"
 )
+
+def generate_cdf_plots_by_anomes(
+    df,
+    atraso_range=None,
+    highlight_targets=None,
+    max_points=1_000_000,
+    max_percentile=None,
+    output_prefix="cdf_plot"
+):
+    """
+    Generate and save CDF plots for each unique anomes in the DataFrame.
+
+    Parameters:
+    - df (pd.DataFrame): Input DataFrame with 'target', 'atraso', and 'anomes'.
+    - atraso_range (tuple): Optional (min, max) for filtering 'atraso'.
+    - highlight_targets (list): Optional list of target values to highlight.
+    - max_points (int): Max number of points to use in plotting.
+    - max_percentile (float): Optional percentile to trim outliers.
+    - output_prefix (str): Prefix for output file names.
+    """
+    unique_anomes = sorted(df['anomes'].unique())
+
+    for ano in unique_anomes:
+        filename = f"{output_prefix}_{ano}.png"
+        print(f"Generating plot for anomes = {ano} -> {filename}")
+        
+        plot_target_cdf(
+            df=df,
+            anomes=ano,
+            atraso_range=atraso_range,
+            highlight_targets=highlight_targets,
+            max_points=max_points,
+            max_percentile=max_percentile,
+            save_to_file=True,
+            file_name=filename
+        )
