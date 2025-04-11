@@ -1,0 +1,130 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_target_cdf(
+    df, 
+    anomes, 
+    atraso_range=None, 
+    highlight_targets=None,
+    max_points=1_000_000,  # Downsampling cap for large datasets
+    max_percentile=None,   # Optional percentile filter
+    save_to_file=False,    # Option to save plot to a file
+    file_name="cdf_plot.png"  # Default file name
+):
+    """
+    Plot the cumulative distribution (empirical CDF) of target values for a given anomes and optional atraso range.
+    Optimized for large datasets. Optionally highlights specific target values and their proportions.
+    Also, optionally filters data by a given percentile and saves the plot to a file.
+    
+    Parameters:
+    - df (pd.DataFrame): Input DataFrame with 'target', 'atraso', and 'anomes' columns.
+    - anomes (int or str): YYYYMM partition to filter by.
+    - atraso_range (tuple or list, optional): (min, max) atraso bounds.
+    - highlight_targets (list of float, optional): Target values to highlight.
+    - max_points (int): Maximum number of points to use in the CDF (for large datasets).
+    - max_percentile (float, optional): Filter data to at most this percentile (0-100).
+    - save_to_file (bool): Whether to save the plot as a file.
+    - file_name (str): File name to save the plot.
+    """
+    # Filter by anomes and atraso range
+    filtered_df = df[df['anomes'] == anomes]
+    if atraso_range is not None and len(atraso_range) == 2:
+        min_a, max_a = atraso_range
+        filtered_df = filtered_df[
+            (filtered_df['atraso'] >= min_a) & 
+            (filtered_df['atraso'] <= max_a)
+        ]
+
+    if filtered_df.empty:
+        print("No data to plot.")
+        return
+
+    # Apply percentile filter if given
+    if max_percentile is not None:
+        max_value = np.percentile(filtered_df['target'], max_percentile)
+        filtered_df = filtered_df[filtered_df['target'] <= max_value]
+
+    # Downsample if there are too many points
+    target_values = filtered_df['target'].values
+    if len(target_values) > max_points:
+        rng = np.random.default_rng(seed=42)
+        target_values = rng.choice(target_values, size=max_points, replace=False)
+
+    # Empirical CDF calculation
+    sorted_target = np.sort(target_values)
+    cdf = np.arange(1, len(sorted_target) + 1) / len(sorted_target)
+
+    # Plot CDF
+    plt.figure(figsize=(10, 5))
+    plt.step(sorted_target, cdf, where='post', label='Empirical CDF', color='steelblue', alpha=0.8)
+
+    # Highlight specific targets if provided
+    if highlight_targets:
+        for val in highlight_targets:
+            idx = np.searchsorted(sorted_target, val, side='right')
+            prob = idx / len(sorted_target)
+
+            plt.axvline(val, color='firebrick', linestyle='--', alpha=0.5)
+            plt.axhline(prob, color='firebrick', linestyle='--', alpha=0.5)
+            plt.scatter(val, prob, color='firebrick', s=40, zorder=5)
+
+            plt.text(
+                val, prob, f'\nTarget = {val}\n{prob:.1%}',
+                va='bottom', ha='right', fontsize=9,
+                bbox=dict(facecolor='white', alpha=0.9, boxstyle='round,pad=0.3'),
+                color='darkred'
+            )
+
+    # Aesthetic improvements
+    title = f"CDF of Target - anomes: {anomes}"
+    if atraso_range:
+        title += f", atraso: {min_a} to {max_a}"
+    if max_percentile is not None:
+        title += f", Filtered by {max_percentile}th percentile"
+
+    plt.title(title)
+    plt.xlabel("Target Value")
+    plt.ylabel("Cumulative Probability")
+    plt.grid(color='lightgray', linestyle='--', linewidth=0.5, alpha=0.6)
+    plt.tight_layout()
+
+    # Show or save the plot
+    if save_to_file:
+        plt.savefig(file_name, dpi=300)
+        print(f"Plot saved as {file_name}")
+    else:
+        plt.show()
+
+
+import pandas as pd
+import numpy as np
+
+# Create synthetic data
+np.random.seed(42)
+n = 2_000_000  # simulate a big dataset
+
+df_sample = pd.DataFrame({
+    'target': np.random.gamma(shape=2, scale=3, size=n),  # skewed distribution
+    'atraso': np.random.randint(0, 30, size=n),
+    'anomes': np.random.choice([202401, 202402, 202403], size=n, p=[0.3, 0.3, 0.4])
+})
+
+# 1. Basic plot for a specific month
+plot_target_cdf(df_sample, anomes=202403)
+
+# 2. Filter by atraso and highlight values
+plot_target_cdf(df_sample, anomes=202403, atraso_range=[5, 15], highlight_targets=[5, 10, 15])
+
+# 3. Add percentile cap to exclude outliers
+plot_target_cdf(df_sample, anomes=202403, max_percentile=95)
+
+# 4. Combine all options and save to file
+plot_target_cdf(
+    df_sample,
+    anomes=202403,
+    atraso_range=[0, 20],
+    highlight_targets=[5, 10],
+    max_percentile=90,
+    save_to_file=True,
+    file_name="test_cdf_plot.png"
+)
