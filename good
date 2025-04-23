@@ -1,0 +1,70 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Simulate data
+np.random.seed(0)
+dates = pd.date_range(start='2024-01-01', periods=100)
+classes = ['A', 'B', 'C']
+df = pd.DataFrame({
+    'date': np.random.choice(dates, 500),
+    'class': np.random.choice(classes, 500, p=[0.5, 0.3, 0.2])
+})
+
+# Aggregate counts per week
+df['week'] = df['date'].dt.to_period('W').dt.start_time
+count_per_week = df.groupby(['week', 'class']).size().unstack(fill_value=0)
+percentage_per_week = count_per_week.div(count_per_week.sum(axis=1), axis=0)
+
+# Plot
+percentage_per_week.plot(kind='area', stacked=True, colormap='Set2', figsize=(12,6))
+plt.title('Stacked Area Plot - Class Distribution Over Time')
+plt.ylabel('Percentage')
+plt.xlabel('Week')
+plt.legend(title='Class')
+plt.tight_layout()
+plt.show()
+
+
+import seaborn as sns
+
+# Count per month
+df['month'] = df['date'].dt.to_period('M').dt.to_timestamp()
+counts = df.groupby(['month', 'class']).size().reset_index(name='count')
+
+# Normalize within each month
+counts['percentage'] = counts.groupby('month')['count'].apply(lambda x: 100 * x / x.sum())
+
+# Plot
+g = sns.catplot(
+    data=counts, x='class', y='percentage', col='month',
+    kind='bar', col_wrap=4, height=4, sharey=True, palette='Set2'
+)
+g.fig.subplots_adjust(top=0.9)
+g.fig.suptitle('Faceted Bar Charts - Class Percentage per Month')
+plt.show()
+
+
+# Reuse monthly percentage
+pivot = counts.pivot(index='month', columns='class', values='percentage').fillna(0)
+
+pivot.plot(kind='bar', figsize=(12,6), colormap='Set2')
+plt.title('Grouped Bar Chart - Class Percentages per Month')
+plt.ylabel('Percentage')
+plt.xlabel('Month')
+plt.xticks(rotation=45)
+plt.legend(title='Class')
+plt.tight_layout()
+plt.show()
+
+
+# Weekly heatmap of percentages
+heatmap_data = percentage_per_week.T  # Transpose for heatmap: classes x weeks
+
+plt.figure(figsize=(12, 4))
+sns.heatmap(heatmap_data, cmap='YlGnBu', annot=True, fmt='.1f', cbar_kws={'label': 'Percentage'})
+plt.title('Heatmap - Class Distribution Over Time')
+plt.xlabel('Week')
+plt.ylabel('Class')
+plt.tight_layout()
+plt.show()
