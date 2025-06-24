@@ -1,0 +1,14 @@
+import polars as pl
+
+def convert_to_float32_inplace(df: pl.DataFrame) -> pl.DataFrame:
+    # Identify columns to convert
+    convert_cols = [
+        col for col, dtype in zip(df.columns, df.dtypes)
+        if dtype == pl.Float64 or isinstance(dtype, pl.Decimal)
+    ]
+    
+    # Apply parallel casting in a single batch
+    if convert_cols:
+        return df.with_columns(
+            pl.col(convert_cols).cast(pl.Float32)
+    return df
