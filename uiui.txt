@@ -1,0 +1,78 @@
+WITH data_corte AS (
+    -- 1. Definimos a data de referência D0 (ex: 1º de Janeiro de 2026)
+    SELECT date_parse('20260101', '%Y%m%d') AS d0
+),
+
+safra_publico AS (
+    -- 2. Isolamos a base de clientes elegíveis na data de corte
+    SELECT 
+        id_contrato
+    FROM publico
+    -- Filtro hipotético para garantir que estamos pegando a foto correta do público
+    WHERE data_ref = 20260101 
+),
+
+primeiro_evento AS (
+    -- 3. Encontramos apenas a PRIMEIRA contratação de cada contrato
+    SELECT 
+        id_contrato,
+        MIN(date_parse(CAST(data_evento AS VARCHAR), '%Y%m%d')) AS data_primeiro_evento
+    FROM eventos
+    GROUP BY id_contrato
+),
+
+calculo_janela_k AS (
+    -- 4. Cruzamos o público com o evento e calculamos k (em semanas)
+    SELECT 
+        p.id_contrato,
+        c.d0,
+        e.data_primeiro_evento,
+        CASE 
+            WHEN e.data_primeiro_evento IS NOT NULL AND e.data_primeiro_evento >= c.d0 
+            THEN floor(date_diff('day', c.d0, e.data_primeiro_evento) / 7.0) + 1
+            ELSE NULL 
+        END AS semana_k
+    FROM safra_publico p
+    CROSS JOIN data_corte c
+    LEFT JOIN primeiro_evento e 
+        ON p.id_contrato = e.id_contrato
+),
+
+agregacao_eventos AS (
+    -- 5. Contamos os eventos exatos por semana (E_k)
+    SELECT 
+        semana_k,
+        COUNT(id_contrato) AS eventos_ek
+    FROM calculo_janela_k
+    WHERE semana_k IS NOT NULL 
+      AND semana_k <= 24 -- Limitamos a análise para as primeiras 24 semanas
+    GROUP BY semana_k
+),
+
+total_publico AS (
+    -- 6. Calculamos o N total da população (N_0)
+    SELECT COUNT(id_contrato) AS populacao_inicial
+    FROM safra_publico
+)
+
+-- 7. Cálculo final do Hazard Rate usando Window Functions
+SELECT 
+    a.semana_k,
+    a.eventos_ek,
+    
+    -- R_k = População Inicial - (Soma cumulativa de eventos estritamente ANTERIORES à semana atual)
+    (t.populacao_inicial - COALESCE(SUM(a.eventos_ek) OVER (
+        ORDER BY a.semana_k 
+        ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+    ), 0)) AS populacao_em_risco_rk,
+    
+    -- Hazard Rate = E_k / R_k
+    CAST(a.eventos_ek AS DOUBLE) / 
+    (t.populacao_inicial - COALESCE(SUM(a.eventos_ek) OVER (
+        ORDER BY a.semana_k 
+        ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+    ), 0)) AS hazard_rate
+
+FROM agregacao_eventos a
+CROSS JOIN total_publico t
+ORDER BY a.semana_k;
