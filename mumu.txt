@@ -1,0 +1,23 @@
+Proporção Positiva := 
+VAR DataAtual = MAX('SuaTabela'[data])
+VAR TipoAtual = SELECTEDVALUE('SuaTabela'[tipo_target])
+
+// Defina as regras de corte para cada target
+VAR DeveMostrar = 
+    SWITCH(
+        TRUE();
+        TipoAtual = "4w" && DataAtual <= DATE(2026; 5; 15); TRUE(); // Corte do 4w
+        TipoAtual = "8w" && DataAtual <= DATE(2026; 4; 15); TRUE(); // Corte do 8w
+        TipoAtual <> "4w" && TipoAtual <> "8w"; TRUE(); // Outras targets sem restrição
+        FALSE() // Se não atender às regras acima, não mostra
+    )
+
+RETURN
+IF(
+    DeveMostrar;
+    
+    // Sua fórmula original:
+    CALCULATE(SUM('SuaTabela'[total]); 'SuaTabela'[target] = 1) / SUM('SuaTabela'[total]);
+    
+    BLANK() // Oculta o dado
+)
